@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>고도화 전략 실행 타임테이블</title>
+<style>
+:root{
+  --main:#953734;--main2:#7d2d27;
+  --bg:#fff;--bg2:#F7F6F3;
+  --border:#E3E0D8;--border2:#CFCABE;
+  --text:#1A1A1A;--text2:#6B6A64;--text3:#9A988F;
+  --danger:#C0392B;
+  --g1-bg:#FEF9F7;--g2-bg:#F6F9FE;
+  --g1-acc:#953734;--g2-acc:#2E6B9E;
+  --lbl:256px;--prg:92px;
+  /* 시그널 3색 체계로 통일 (진척률·상태 표시 전반에 재사용) */
+  --sig-low:#C04040;   /* 집중관리 = 진척 저조(0~29%) */
+  --sig-mid:#C8922A;   /* 관찰필요 = 진척 보통(30~69%) */
+  --sig-high:#4BA888;  /* 성장 = 진척 양호(70%+) */
+  --sig-none:#C8C8C8;  /* 0% 무진척 */
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;background:var(--bg2);color:var(--text);padding:18px;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:1240px;margin:0 auto;}
+.page-hdr{background:#fff;border-radius:12px;padding:18px 24px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.hdr-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+.page-title{font-size:19px;font-weight:700;color:var(--main);}
+.page-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.btn{font-family:inherit;font-size:12px;padding:6px 13px;border-radius:7px;cursor:pointer;border:1px solid var(--border2);background:#fff;color:var(--text);}
+.btn:hover{background:var(--bg2);}
+.btn.pri{background:var(--main);color:#fff;border-color:var(--main);}
+.btn.pri:hover{background:var(--main2);}
+.mode-badge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:600;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;}
+.dashboard{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px;}
+.dash{background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,.05);border:1px solid var(--border);}
+.dash.tot{border-left:4px solid var(--main);}
+.dash.g1c{border-left:4px solid var(--g1-acc);}
+.dash.g2c{border-left:4px solid var(--g2-acc);}
+.dash-lbl{font-size:10.5px;color:var(--text3);font-weight:700;letter-spacing:.03em;margin-bottom:5px;}
+.dash-num{font-size:34px;font-weight:700;line-height:1;}
+.dash-bar{height:5px;background:var(--border);border-radius:3px;margin-top:7px;overflow:hidden;}
+.dash-bar-fill{height:100%;border-radius:3px;}
+.dash-sub{font-size:10.5px;color:var(--text3);margin-top:4px;}
+.legend{display:flex;flex-wrap:wrap;gap:8px;background:#fff;border-radius:8px;padding:8px 14px;margin-bottom:10px;border:1px solid var(--border);align-items:center;}
+.leg-title{font-size:10.5px;font-weight:700;color:var(--text3);margin-right:2px;}
+.legend span{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);}
+.sw{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+.leg-sep{width:1px;height:13px;background:var(--border2);margin:0 3px;}
+.gantt-box{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;position:relative;}
+#today-ov{position:absolute;top:0;bottom:0;width:14px;margin-left:-7px;border-left:2px dashed var(--danger);z-index:50;cursor:ew-resize;}
+#today-lbl{position:absolute;top:5px;left:50%;transform:translateX(-50%);background:var(--danger);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 5px rgba(0,0,0,.2);}
+#today-lbl::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:var(--danger);}
+.gc{display:grid;grid-template-columns:var(--lbl) 1fr var(--prg);}
+.gc-mhdr{grid-column:1/-1;display:grid;grid-template-columns:var(--lbl) 1fr var(--prg);background:var(--bg2);}
+.gc-whdr{grid-column:1/-1;display:grid;grid-template-columns:var(--lbl) 1fr var(--prg);border-bottom:2px solid var(--border2);background:var(--bg2);}
+.gc-msp{border-right:1px solid var(--border2);}
+.gc-mt{position:relative;height:22px;border-bottom:1px solid var(--border2);}
+.gc-wt{position:relative;height:18px;}
+.gc-tick{position:absolute;bottom:3px;font-size:11px;font-weight:700;color:var(--text2);transform:translateX(-50%);}
+.gc-wtick{position:absolute;bottom:2px;font-size:9px;color:var(--text3);transform:translateX(-50%);white-space:nowrap;}
+.gc-tline{position:absolute;top:0;bottom:0;width:1px;background:var(--border);opacity:.5;}
+.gc-wline{position:absolute;top:0;bottom:0;width:1px;background:var(--border);opacity:.3;}
+.gc-mline{position:absolute;top:0;bottom:0;width:1px;background:var(--border2);opacity:.8;}
+.gc-phdr{border-left:1px solid var(--border2);border-bottom:1px solid var(--border2);display:flex;align-items:flex-end;justify-content:flex-end;padding:0 8px 3px;font-size:9px;font-weight:700;color:var(--text3);}
+.gc-phdr2{border-left:1px solid var(--border2);}
+.c-lbl{display:flex;align-items:center;gap:5px;padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border2);}
+.c-lbl.group-lbl{font-weight:700;font-size:12px;min-height:32px;}
+.c-lbl.ap-lbl{min-height:44px;font-size:12px;}
+.c-lbl.sub-lbl{padding-left:26px;font-size:11.5px;color:var(--text2);min-height:32px;cursor:pointer;}
+.c-track{position:relative;border-bottom:1px solid var(--border);}
+.c-prog{border-bottom:1px solid var(--border);border-left:1px solid var(--border2);display:flex;align-items:center;padding:0 8px 0 5px;gap:5px;}
+.rg1 .c-lbl,.rg1 .c-track,.rg1 .c-prog{background:var(--g1-bg);}
+.rg2 .c-lbl,.rg2 .c-track,.rg2 .c-prog{background:var(--g2-bg);}
+.rg0 .c-lbl,.rg0 .c-track,.rg0 .c-prog{background:var(--bg2);}
+.bar{position:absolute;border-radius:5px;overflow:hidden;display:flex;align-items:center;padding:0 5px;font-size:10px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.1);}
+.bar:hover{filter:brightness(.92);}
+.bar-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bar-prog-layer{position:absolute;left:0;top:0;bottom:0;background:rgba(255,255,255,.3);border-radius:5px 0 0 5px;pointer-events:none;}
+.bar-outer{position:absolute;font-size:9px;color:var(--text2);white-space:nowrap;pointer-events:none;}
+.pb-bg{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.pb-fill{height:100%;border-radius:2px;}
+.pb-pct{font-size:11px;font-weight:700;min-width:26px;text-align:right;white-space:nowrap;}
+.pop-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;}
+.pop-ov.open{display:flex;}
+.pop{background:#fff;border-radius:14px;padding:24px 26px;width:520px;max-width:93vw;max-height:88vh;overflow-y:auto;box-shadow:0 14px 44px rgba(0,0,0,.22);position:relative;}
+.pop-x{position:absolute;top:12px;right:14px;font-size:18px;cursor:pointer;color:var(--text3);background:none;border:none;padding:2px 6px;border-radius:4px;}
+.pop-x:hover{background:var(--bg2);}
+.pop-tag{display:inline-block;font-size:11px;padding:2px 9px;border-radius:4px;font-weight:600;margin-bottom:8px;}
+.pop-ttl{font-size:15px;font-weight:700;color:var(--main);margin-bottom:13px;line-height:1.4;}
+.pop-sec{margin-bottom:11px;}
+.pop-lbl{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.04em;margin-bottom:3px;text-transform:uppercase;}
+.pop-val{font-size:12.5px;color:var(--text);line-height:1.6;}
+.pop-inp{width:100%;font-size:12px;height:30px;border:1px solid var(--border2);border-radius:5px;padding:0 8px;font-family:inherit;}
+.pop-ta{width:100%;font-size:12px;border:1px solid var(--border2);border-radius:5px;padding:6px 8px;resize:vertical;font-family:inherit;min-height:52px;}
+.rng-row{display:flex;align-items:center;gap:8px;margin-top:4px;}
+.rng-row input[type=range]{flex:1;accent-color:var(--main);}
+.rng-row input[type=number]{width:52px;font-size:12px;height:28px;border:1px solid var(--border2);border-radius:5px;text-align:center;padding:0 3px;}
+.btn-row{display:flex;gap:8px;margin-top:12px;}
+.sv-btn{font-size:12px;padding:7px 16px;background:var(--main);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;}
+.sv-btn:hover{background:var(--main2);}
+.cn-btn{font-size:12px;padding:7px 12px;background:transparent;color:var(--text2);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-family:inherit;}
+.cl-item{display:flex;align-items:center;gap:7px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--border);cursor:pointer;}
+.cl-item:last-child{border:none;}
+.cl-item:hover{background:var(--bg2);}
+.user-note{background:#FFF3B0;color:#6B4E00;padding:1px 5px;border-radius:3px;font-weight:600;white-space:nowrap;}
+.ep{display:flex;flex-wrap:wrap;gap:7px;padding:7px 12px;background:var(--bg2);border-top:1px solid var(--border2);grid-column:1/-1;}
+.ep label{font-size:11px;color:var(--text2);display:flex;align-items:center;gap:3px;}
+.ep input,.ep select{font-size:11px;height:25px;border:1px solid var(--border2);border-radius:4px;padding:0 5px;}
+.ep input[type=date]{width:108px;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(14px);background:#2C2C2C;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;opacity:0;transition:.22s;pointer-events:none;z-index:300;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+/* 저장 상태 인디케이터 */
+.save-status{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:600;}
+.save-status.saved{background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;}
+.save-status.saving{background:#FFF8E1;color:#F57F17;border:1px solid #FFD54F;}
+.save-status.error{background:#FFEBEE;color:#C62828;border:1px solid #EF9A9A;}
+/* GitHub 설정 패널 */
+.gh-panel{background:#fff;border-radius:10px;padding:14px 18px;margin-bottom:10px;border:1px solid var(--border);display:none;}
+.gh-panel.open{display:block;}
+.gh-panel h3{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:10px;}
+.gh-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+.gh-row label{font-size:11.5px;color:var(--text2);min-width:80px;}
+.gh-row input{flex:1;font-size:11.5px;height:28px;border:1px solid var(--border2);border-radius:5px;padding:0 8px;min-width:160px;}
+.gh-row input[type=password]{font-size:14px;}
+
+/* ── 모바일 반응형 ── */
+@media (max-width: 768px){
+  body{padding:10px;}
+  .page-hdr{padding:14px 16px 12px;border-radius:10px;}
+  .hdr-top{flex-direction:column;align-items:stretch;gap:8px;}
+  .page-title{font-size:16.5px;}
+  .page-sub{font-size:10px;line-height:1.5;}
+  .toolbar{flex-wrap:wrap;gap:5px;}
+  .btn{font-size:11.5px;padding:7px 11px;min-height:36px;}
+  .dashboard{grid-template-columns:1fr;gap:8px;}
+  .dash{padding:12px 14px;}
+  .dash-num{font-size:28px;}
+  .legend{gap:6px;padding:8px 10px;}
+  .legend span{font-size:10px;}
+  .leg-title{width:100%;margin-bottom:2px;}
+
+  /* 간트 영역: 가로 스크롤 컨테이너로 전환, 라벨 컬럼은 축소 */
+  :root{--lbl:150px;--prg:64px;}
+  .gantt-box{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .gc{min-width:640px;}
+  .c-lbl.ap-lbl{font-size:11px;padding:6px 6px;}
+  .c-lbl.sub-lbl{font-size:10.5px;padding-left:18px;}
+  .c-lbl.group-lbl{font-size:11px;}
+  .pb-pct{font-size:10px;min-width:22px;}
+  .gc-tick{font-size:9.5px;}
+  .gc-wtick{font-size:8px;}
+
+  /* 터치 타겟 확대: 클릭 영역이 작으면 오조작 유발 */
+  .c-lbl.ap-lbl,.c-lbl.sub-lbl{min-height:40px;}
+  .gc-chevron,.c-lbl span{touch-action:manipulation;}
+  .bar{min-height:22px;}
+
+  /* 팝업: 모바일 전체폭에 맞춰 여백 축소 */
+  .pop{width:94vw;padding:18px 16px;max-height:85vh;}
+  .pop-ttl{font-size:14px;}
+  .pop-row,.pop-sec{flex-wrap:wrap;}
+
+  /* GitHub 설정 패널 입력폭 확보 */
+  .gh-row{flex-direction:column;align-items:stretch;}
+  .gh-row label{min-width:0;margin-bottom:2px;}
+  .gh-row input{min-width:0;width:100%;}
+}
+@media (max-width: 420px){
+  .dash-num{font-size:24px;}
+  .page-title{font-size:15px;}
+  :root{--lbl:120px;--prg:52px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="page-hdr">
+  <div class="hdr-top">
+    <div>
+      <div class="page-title">고도화 전략 실행 타임테이블</div>
+      <div class="page-sub">과제1 [방어] · 과제2 [개선] &nbsp;|&nbsp; AP명 클릭: 상세팝업 · ▶ 클릭: 세부 펼치기 · 막대·진척률 클릭: 수정 · 기준일 점선: 드래그 · 진척률 0% AP는 자동으로 접힘(진행중·완료만 펼침) · <span class="user-note">[대괄호]</span>는 팀장 메모</div>
+    </div>
+    <div class="toolbar">
+      <span class="save-status saved" id="saveStatus">● 저장됨</span>
+      <span class="mode-badge" id="modeBadge">● Vercel 연동</span>
+      <button class="btn" id="ghBtn">⚙ GitHub 설정</button>
+      <button class="btn pri" id="saveBtn">↑ 저장 (GitHub Push)</button>
+    </div>
+  </div>
+
+  <!-- GitHub 설정 패널 -->
+  <div class="gh-panel" id="ghPanel">
+    <h3>⚙ GitHub 연동 설정 <span style="font-size:10px;color:var(--text3);font-weight:400;">(이 브라우저에만 저장됨 — 공유 금지)</span></h3>
+    <div class="gh-row">
+      <label>Owner/Repo</label>
+      <input type="text" id="ghRepo" placeholder="예: psh/baekchae-gantt">
+      <span style="font-size:10.5px;color:var(--text3);">GitHub 저장소 이름</span>
+    </div>
+    <div class="gh-row">
+      <label>Branch</label>
+      <input type="text" id="ghBranch" placeholder="main" style="max-width:120px;">
+    </div>
+    <div class="gh-row">
+      <label>Token</label>
+      <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx">
+      <span style="font-size:10.5px;color:var(--text3);">GitHub Personal Access Token (repo 권한)</span>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="sv-btn" id="ghSaveConfig">설정 저장</button>
+      <button class="cn-btn" id="ghPanelClose">닫기</button>
+    </div>
+  </div>
+
+  <div class="dashboard" id="dashboard"></div>
+  <div class="legend">
+    <span class="leg-title">색상 안내 ▶</span>
+    <span><span class="sw" style="background:#B8C4CC;border:1px solid #aaa"></span>분석/기획</span>
+    <span><span class="sw" style="background:#9B91D4"></span>개발(R&D)</span>
+    <span><span class="sw" style="background:#6B9FD4"></span>검증(선행점포)</span>
+    <span><span class="sw" style="background:#4BA888"></span>확산(전지점)</span>
+    <span><span class="sw" style="background:#444441"></span>운영</span>
+    <span><span class="sw" style="background:#C8922A"></span>검토</span>
+    <span><span class="sw" style="background:#C04040"></span>실행</span>
+    <div class="leg-sep"></div>
+    <span><span class="sw" style="background:#5B8DB8"></span>세부(과제1)</span>
+    <span><span class="sw" style="background:#5B9E7A"></span>세부(과제2)</span>
+    <div class="leg-sep"></div>
+    <span style="color:var(--text3);font-size:10.5px;">막대 위 반투명 레이어 = 진척률</span>
+  </div>
+</div>
+
+<div class="gantt-box" id="ganttBox">
+  <div id="today-ov"><div id="today-lbl"></div></div>
+  <div class="gc" id="gc"></div>
+</div>
+</div>
+
+<div class="pop-ov" id="popOv">
+  <div class="pop">
+    <button class="pop-x" id="popX">&#10005;</button>
+    <div id="popContent"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+// ──────────────────────────────────────────
+// GitHub 연동 설정
+// ──────────────────────────────────────────
+const GH_CONFIG_KEY = 'bc_gh_config';
+function loadGhConfig(){
+  try{ return JSON.parse(localStorage.getItem(GH_CONFIG_KEY)||'{}'); }catch(e){ return {}; }
+}
+function saveGhConfig(cfg){
+  localStorage.setItem(GH_CONFIG_KEY, JSON.stringify(cfg));
+}
+
+// GitHub에 data.json push
+async function pushToGitHub(dataObj){
+  const cfg = loadGhConfig();
+  if(!cfg.repo || !cfg.token){
+    throw new Error('GitHub 설정이 없습니다. ⚙ GitHub 설정 버튼을 눌러 먼저 설정해주세요.');
+  }
+  const repo = cfg.repo;
+  const branch = cfg.branch || 'main';
+  const token = cfg.token;
+  const path = 'data.json';
+  const apiBase = `https://api.github.com/repos/${repo}/contents/${path}`;
+
+  // 현재 파일 SHA 가져오기 (업데이트에 필요)
+  let sha = null;
+  try{
+    const res = await fetch(apiBase + '?ref=' + branch, {
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if(res.ok){ const j = await res.json(); sha = j.sha; }
+  }catch(e){}
+
+  // 데이터에 메타 업데이트
+  const now = new Date();
+  dataObj.meta = {
+    lastUpdated: now.toISOString().split('T')[0],
+    updatedBy: '박상현',
+    version: 'v8'
+  };
+
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(dataObj, null, 2))));
+  const body = {
+    message: `[타임테이블] ${now.getMonth()+1}/${now.getDate()} 진척률·일정 업데이트`,
+    content,
+    branch
+  };
+  if(sha) body.sha = sha;
+
+  const putRes = await fetch(apiBase, {
+    method: 'PUT',
+    headers: {
+      'Authorization': 'token ' + token,
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.github.v3+json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if(!putRes.ok){
+    const err = await putRes.json();
+    throw new Error(err.message || 'GitHub push 실패');
+  }
+  return await putRes.json();
+}
+
+// ──────────────────────────────────────────
+// 데이터 로드 (data.json fetch)
+// ──────────────────────────────────────────
+const A0 = new Date(2026,5,1), AE = new Date(2026,11,31);
+const TD = Math.round((AE-A0)/86400000)+1;
+let TODAY=(()=>{ const d=new Date(); d.setHours(0,0,0,0); return d; })();
+let TIDX=Math.round((TODAY-A0)/86400000);
+
+function di(s){return Math.round((new Date(s)-A0)/86400000);}
+function fmt(s){const d=new Date(s);return(d.getMonth()+1)+'/'+(d.getDate());}
+function fmtF(d){return(d.getMonth()+1)+'월 '+d.getDate()+'일';}
+function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// [ ] 대괄호로 감싼 텍스트(팀장 직접 작성 메모)를 별도 색상으로 강조
+function hlBrackets(s){
+  return escHtml(s).replace(/\[([^\]]*)\]/g, '<span class="user-note">[$1]</span>');
+}
+
+const SC={'분석':'#B8C4CC','개발':'#9B91D4','검증':'#6B9FD4','확산':'#4BA888','운영':'#444441','검토':'#C8922A','실행':'#C04040','선정':'#B8C4CC','도입':'#B8C4CC'};
+const ST={'운영':'#fff','실행':'#fff','확산':'#fff','검토':'#fff'};
+const SO=['분석','개발','검증','확산','운영','검토','실행','선정','도입'];
+
+let data = [], AD = {};
+
+async function loadData(){
+  try{
+    const res = await fetch('./data.json?t=' + Date.now());
+    if(!res.ok) throw new Error('data.json 로드 실패');
+    const json = await res.json();
+    data = json.gantt;
+    AD = json.apDesc || {};
+    setStatus('saved', '● 저장됨');
+  }catch(e){
+    setStatus('error', '✕ 로드 실패');
+    toast('data.json 로드 실패: ' + e.message);
+  }
+}
+
+function setStatus(type, text){
+  const el = document.getElementById('saveStatus');
+  el.className = 'save-status ' + type;
+  el.textContent = text;
+}
+
+// ──────────────────────────────────────────
+// 유틸
+// ──────────────────────────────────────────
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+function pc(p){return p===0?'#C8C8C8':p<30?'#C04040':p<70?'#C8922A':'#4BA888';}
+function apc(ap){if(!ap.children.length)return null;return Math.round(ap.children.reduce((a,c)=>a+(c.progress||0),0)/ap.children.length);}
+function gpc(g){const a=g.aps.filter(ap=>ap.children.length);if(!a.length)return null;return Math.round(a.reduce((s,ap)=>s+apc(ap),0)/a.length);}
+function totPc(){const a=data.flatMap(g=>g.aps).filter(ap=>ap.children.length);if(!a.length)return 0;return Math.round(a.reduce((s,ap)=>s+apc(ap),0)/a.length);}
+function lanes(items){const le=[];return items.map(it=>{const s=di(it.start),e=di(it.end);let l=le.findIndex(x=>x<s-1);if(l<0){l=le.length;le.push(0);}le[l]=e;return{...it,lane:l};});}
+
+// 진척률 0%인 AP(아직 손 안 댄 것)는 접어두고, 진행중·완료된 AP는 펼쳐서 챙기기 쉽게
+function syncOpenState(ap){
+  const p=apc(ap);
+  if(p!==null && p>0){ OS.add(ap.id); } else { OS.delete(ap.id); }
+}
+
+const OS=new Set();
+const ES=new Set();
+
+// ──────────────────────────────────────────
+// 대시보드
+// ──────────────────────────────────────────
+function rDash(){
+  if(!data.length) return;
+  const tp=totPc(),g1p=gpc(data[0])??0,g2p=gpc(data[1])??0;
+  document.getElementById('dashboard').innerHTML=`
+  <div class="dash tot"><div class="dash-lbl">전체 진척률</div><div class="dash-num" style="color:${pc(tp)}">${tp}%</div>
+    <div class="dash-bar"><div class="dash-bar-fill" style="width:${tp}%;background:${pc(tp)}"></div></div>
+    <div class="dash-sub">과제1·2 전체 세부항목 평균</div></div>
+  <div class="dash g1c"><div class="dash-lbl">과제1 [방어]</div><div class="dash-num" style="color:${pc(g1p)}">${g1p}%</div>
+    <div class="dash-bar"><div class="dash-bar-fill" style="width:${g1p}%;background:${pc(g1p)}"></div></div>
+    <div class="dash-sub">${data[0].aps.length}개 AP · ${data[0].aps.reduce((a,ap)=>a+ap.children.length,0)}개 세부항목</div></div>
+  <div class="dash g2c"><div class="dash-lbl">과제2 [개선]</div><div class="dash-num" style="color:${pc(g2p)}">${g2p}%</div>
+    <div class="dash-bar"><div class="dash-bar-fill" style="width:${g2p}%;background:${pc(g2p)}"></div></div>
+    <div class="dash-sub">${data[1].aps.length}개 AP · ${data[1].aps.reduce((a,ap)=>a+ap.children.length,0)}개 세부항목</div></div>`;
+}
+
+// ──────────────────────────────────────────
+// 기준일 오버레이
+// ──────────────────────────────────────────
+function updOv(){
+  const box=document.getElementById('ganttBox');
+  const gc=document.getElementById('gc');
+  if(!gc.children.length)return;
+  const br=box.getBoundingClientRect(),gr=gc.getBoundingClientRect();
+  const lblW=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lbl'))||256;
+  const prgW=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--prg'))||92;
+  const tw=gr.width-lblW-prgW;
+  const tl=gr.left-br.left+lblW;
+  const p=Math.max(0,Math.min(1,TIDX/TD));
+  document.getElementById('today-ov').style.left=(tl+p*tw)+'px';
+  document.getElementById('today-lbl').textContent=fmtF(TODAY);
+}
+
+function initDrag(){
+  const ov=document.getElementById('today-ov');
+  function ti(){
+    const br=document.getElementById('ganttBox').getBoundingClientRect();
+    const gr=document.getElementById('gc').getBoundingClientRect();
+    const lblW=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lbl'))||256;
+    const prgW=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--prg'))||92;
+    return{tl:gr.left+lblW,tw:gr.width-lblW-prgW,bl:br.left};
+  }
+  function mv(cx){const{tl,tw,bl}=ti();const r=Math.max(0,Math.min(1,(cx-tl)/tw));const dO=Math.round(r*TD);const nd=new Date(A0);nd.setDate(nd.getDate()+dO);const ov2=document.getElementById('today-ov');ov2.style.left=(cx-bl)+'px';document.getElementById('today-lbl').textContent=fmtF(nd)+' ✎';}
+  function cm(cx){const{tl,tw}=ti();const r=Math.max(0,Math.min(1,(cx-tl)/tw));const dO=Math.round(r*TD);const nd=new Date(A0);nd.setDate(nd.getDate()+dO);TODAY=nd;TODAY.setHours(0,0,0,0);TIDX=Math.round((TODAY-A0)/86400000);updOv();toast(fmtF(TODAY)+'로 기준일 변경됨');}
+  ov.addEventListener('mousedown',e=>{e.preventDefault();const mm=mv2=>mv(mv2.clientX);const mu=mu2=>{document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);cm(mu2.clientX);};document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu);});
+  ov.addEventListener('touchstart',e=>{e.preventDefault();const tm=tv=>mv(tv.touches[0].clientX);const te=te2=>{ov.removeEventListener('touchmove',tm);ov.removeEventListener('touchend',te);cm(te2.changedTouches[0].clientX);};ov.addEventListener('touchmove',tm);ov.addEventListener('touchend',te);});
+}
+
+// ──────────────────────────────────────────
+// 팝업
+// ──────────────────────────────────────────
+const pov=document.getElementById('popOv');
+document.getElementById('popX').onclick=()=>pov.classList.remove('open');
+pov.onclick=e=>{if(e.target===pov)pov.classList.remove('open');};
+function op(h){document.getElementById('popContent').innerHTML=h;pov.classList.add('open');}
+
+function showAP(ap){
+  const inf=AD[ap.id]||{};const ap_p=apc(ap);const col=ap_p!==null?pc(ap_p):'var(--text3)';
+  const stages=ap.bars.map(b=>`<span style="display:inline-block;background:${SC[b.stage]||'#ccc'};color:${ST[b.stage]||'#222'};border-radius:4px;padding:1px 8px;font-size:11px;margin:2px;">${b.stage} ${fmt(b.start)}~${fmt(b.end)}</span>`).join(' ');
+  const crows=ap.children.map(c=>`<div class="cl-item" data-cid="${c.id}"><span style="width:8px;height:8px;border-radius:2px;background:${c.color};flex-shrink:0;display:inline-block;"></span><span style="flex:1;font-size:12px;">${hlBrackets(c.name)}<br><span style="color:var(--text3);font-size:10.5px;">${escHtml(c.owner)} · ${fmt(c.start)}~${fmt(c.end)}</span></span><span style="font-size:12px;font-weight:700;color:${pc(c.progress||0)};min-width:30px;text-align:right;">${c.progress||0}%</span></div>`).join('');
+  op(`<div class="pop-tag" style="background:${SC[ap.bars[0]?.stage]||'#eee'};color:#333;">${escHtml(ap.label)}</div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+    <div class="pop-ttl" style="margin-bottom:0;">${hlBrackets(ap.label)}</div>
+    <div style="font-size:30px;font-weight:700;color:${col};line-height:1;">${ap_p!==null?ap_p+'%':'—'}</div>
+  </div>
+  <div class="pop-sec"><div class="pop-lbl">진행 단계</div><div>${stages}</div></div>
+  <div class="pop-sec"><div class="pop-lbl">내용 요약 <span style="font-size:9.5px;color:var(--text3);font-weight:400;">(수정 가능)</span></div><textarea class="pop-ta" id="pd">${inf.desc||''}</textarea></div>
+  <div style="display:flex;gap:10px;">
+    <div class="pop-sec" style="flex:1;"><div class="pop-lbl">목표</div><textarea class="pop-ta" id="pg" style="min-height:42px;">${inf.goal||''}</textarea></div>
+    <div class="pop-sec" style="flex:1;"><div class="pop-lbl">R&R</div><textarea class="pop-ta" id="po" style="min-height:42px;">${inf.owner||''}</textarea></div>
+  </div>
+  <div class="btn-row"><button class="sv-btn" id="ps">저장</button><button class="cn-btn" id="pc2">닫기</button></div>
+  ${ap.children.length?`<div class="pop-sec" style="margin-top:12px;"><div class="pop-lbl">세부 일정 <span style="font-size:9.5px;color:var(--text3);font-weight:400;">(클릭해서 수정)</span></div>${crows}</div>`:''}`);
+  setTimeout(()=>{
+    const sv=document.getElementById('ps');const cn=document.getElementById('pc2');
+    if(sv)sv.onclick=()=>{if(!AD[ap.id])AD[ap.id]={};AD[ap.id].desc=document.getElementById('pd').value;AD[ap.id].goal=document.getElementById('pg').value;AD[ap.id].owner=document.getElementById('po').value;pov.classList.remove('open');setStatus('saving','● 미저장');toast('내용 수정됨 — GitHub 저장 버튼을 눌러 반영하세요.');};
+    if(cn)cn.onclick=()=>pov.classList.remove('open');
+    document.querySelectorAll('.cl-item').forEach(li=>li.onclick=()=>{const c=ap.children.find(x=>x.id===li.dataset.cid);if(c){pov.classList.remove('open');showC(c,ap);}});
+  },0);
+}
+
+function showC(c, ap){
+  const dl=Math.round((new Date(c.end)-new Date(c.start))/86400000)+1;
+  op(`<div class="pop-tag" style="background:${c.color};color:#fff;">세부 일정</div>
+  <div class="pop-ttl" style="font-size:14px;">세부 일정 수정</div>
+  <div class="pop-sec"><div class="pop-lbl">항목명</div><input class="pop-inp" id="cn2" value="${c.name}"></div>
+  <div style="display:flex;gap:10px;">
+    <div class="pop-sec" style="flex:1;"><div class="pop-lbl">담당</div><input class="pop-inp" id="co" value="${c.owner}"></div>
+    <div class="pop-sec" style="flex:1;"><div class="pop-lbl">기간 (${dl}일)</div><div class="pop-val">${fmt(c.start)} ~ ${fmt(c.end)}</div></div>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <div class="pop-sec" style="flex:1;"><div class="pop-lbl">시작일</div><input class="pop-inp" id="cs" type="date" value="${c.start}"></div>
+    <div class="pop-sec" style="flex:1;"><div class="pop-lbl">종료일</div><input class="pop-inp" id="ce" type="date" value="${c.end}"></div>
+  </div>
+  <div class="pop-sec"><div class="pop-lbl">진척률 <span id="cpd" style="color:${pc(c.progress||0)};font-weight:700;">${c.progress||0}%</span></div>
+    <div class="rng-row">
+      <input type="range" id="cpr" min="0" max="100" step="5" value="${c.progress||0}" oninput="const v=this.value;document.getElementById('cpd').textContent=v+'%';document.getElementById('cpn').value=v;">
+      <input type="number" id="cpn" min="0" max="100" value="${c.progress||0}" oninput="const v=this.value;document.getElementById('cpr').value=v;document.getElementById('cpd').textContent=v+'%';">
+    </div>
+  </div>
+  <div class="btn-row"><button class="sv-btn" id="csv">저장</button><button class="cn-btn" id="ccn">취소</button></div>`);
+  setTimeout(()=>{
+    const sv=document.getElementById('csv');const cn=document.getElementById('ccn');
+    if(sv)sv.onclick=()=>{
+      const ns=document.getElementById('cs').value,ne=document.getElementById('ce').value;
+      const nn=document.getElementById('cn2').value.trim(),no=document.getElementById('co').value.trim();
+      const np=Math.min(100,Math.max(0,parseInt(document.getElementById('cpr').value)||0));
+      if(new Date(ne)<new Date(ns)){alert('종료일이 시작일보다 빠릅니다.');return;}
+      if(!nn){alert('항목명을 입력해주세요.');return;}
+      c.start=ns;c.end=ne;c.name=nn;c.owner=no;c.progress=np;
+      if(ap) syncOpenState(ap);
+      pov.classList.remove('open');render();setStatus('saving','● 미저장');toast('수정됨 — GitHub 저장 버튼을 눌러 반영하세요.');
+    };
+    if(cn)cn.onclick=()=>pov.classList.remove('open');
+  },0);
+}
+
+// ──────────────────────────────────────────
+// 막대 편집 패널
+// ──────────────────────────────────────────
+function bep(b,key){
+  const d=document.createElement('div');d.className='ep';d.style.gridColumn='1/-1';
+  const opts=SO.map(s=>`<option value="${s}"${s===b.stage?' selected':''}>${s}</option>`).join('');
+  d.innerHTML=`<label>단계 <select id="bst-${b.id}" style="font-size:11px;height:25px;border:1px solid var(--border2);border-radius:4px;">${opts}</select></label>
+  <label>시작일 <input type="date" id="bs-${b.id}" value="${b.start}" style="font-size:11px;height:25px;border:1px solid var(--border2);border-radius:4px;padding:0 4px;width:108px;"></label>
+  <label>종료일 <input type="date" id="be-${b.id}" value="${b.end}" style="font-size:11px;height:25px;border:1px solid var(--border2);border-radius:4px;padding:0 4px;width:108px;"></label>
+  <button style="font-size:11px;padding:3px 11px;height:25px;background:var(--main);color:#fff;border:none;border-radius:4px;cursor:pointer;" id="bsv-${b.id}">저장</button>
+  <button style="font-size:11px;padding:3px 9px;height:25px;background:transparent;color:var(--text2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;" id="bcn-${b.id}">취소</button>`;
+  setTimeout(()=>{
+    const sv=document.getElementById('bsv-'+b.id);const cn=document.getElementById('bcn-'+b.id);
+    if(sv)sv.onclick=()=>{const ns=document.getElementById('bs-'+b.id).value,ne=document.getElementById('be-'+b.id).value;if(new Date(ne)<new Date(ns)){alert('종료일이 시작일보다 빠릅니다.');return;}b.start=ns;b.end=ne;b.stage=document.getElementById('bst-'+b.id).value;ES.delete(key);render();setStatus('saving','● 미저장');toast('수정됨 — GitHub 저장 버튼을 눌러 반영하세요.');};
+    if(cn)cn.onclick=()=>{ES.delete(key);render();};
+  },0);
+  return d;
+}
+
+// ──────────────────────────────────────────
+// 진척률 셀
+// ──────────────────────────────────────────
+function pCell(p,onClick){
+  const d=document.createElement('div');d.className='c-prog';
+  if(p===null){d.innerHTML='<span style="font-size:11px;color:var(--text3);margin-left:auto;">—</span>';return d;}
+  const col=pc(p);
+  d.innerHTML=`<div class="pb-bg"><div class="pb-fill" style="width:${p}%;background:${col};"></div></div><span class="pb-pct" style="color:${col};">${p}%</span>`;
+  if(onClick){d.style.cursor='pointer';d.onclick=onClick;}
+  return d;
+}
+
+// ──────────────────────────────────────────
+// 메인 렌더
+// ──────────────────────────────────────────
+function render(){
+  if(!data.length) return;
+  rDash();
+  const gc=document.getElementById('gc');gc.innerHTML='';
+
+  // 월 헤더
+  const mh=document.createElement('div');mh.className='gc-mhdr';
+  const ms=document.createElement('div');ms.className='gc-msp';mh.appendChild(ms);
+  const mt=document.createElement('div');mt.className='gc-mt';
+  for(let m=5;m<=11;m++){
+    const mStart=new Date(2026,m,1),mEnd=new Date(2026,m+1,0);
+    const mIdx=Math.round((mStart-A0)/86400000);
+    const mPct=(mIdx/TD*100).toFixed(4)+'%';
+    const tl=document.createElement('div');tl.className='gc-tline';tl.style.left=mPct;mt.appendChild(tl);
+    const daysInMonth=mEnd.getDate();
+    const midIdx=mIdx+Math.round(daysInMonth/2);
+    const midPct=(midIdx/TD*100).toFixed(4)+'%';
+    const tk=document.createElement('div');tk.className='gc-tick';tk.style.left=midPct;tk.textContent=(m+1)+'월';mt.appendChild(tk);
+  }
+  {const eIdx=Math.round((new Date(2026,12,1)-A0)/86400000);const ePct=(eIdx/TD*100).toFixed(4)+'%';const el=document.createElement('div');el.className='gc-tline';el.style.left=ePct;mt.appendChild(el);}
+  mh.appendChild(mt);
+  const ph=document.createElement('div');ph.className='gc-phdr';mh.appendChild(ph);
+  gc.appendChild(mh);
+
+  // 주차 헤더
+  const wh=document.createElement('div');wh.className='gc-whdr';
+  const ws=document.createElement('div');ws.className='gc-msp';wh.appendChild(ws);
+  const wt=document.createElement('div');wt.className='gc-wt';
+  for(let m=5;m<=11;m++){
+    const mStart=new Date(2026,m,1),mEnd=new Date(2026,m+1,0);
+    const mIdx=Math.round((mStart-A0)/86400000);
+    const mPct=(mIdx/TD*100).toFixed(4)+'%';
+    const ml=document.createElement('div');ml.className='gc-mline';ml.style.left=mPct;wt.appendChild(ml);
+    let weekNum=1;let cur=new Date(mStart);
+    while(cur<=mEnd){
+      const wStart=new Date(cur),wEnd=new Date(cur);wEnd.setDate(wEnd.getDate()+6);
+      const wEndC=wEnd>mEnd?mEnd:wEnd;
+      const sIdx=Math.round((wStart-A0)/86400000),eIdx=Math.round((wEndC-A0)/86400000);
+      const sPct=(sIdx/TD*100).toFixed(4)+'%';
+      const widthPct=((eIdx-sIdx+1)/TD*100);
+      if(weekNum>1){const wl=document.createElement('div');wl.className='gc-wline';wl.style.left=sPct;wt.appendChild(wl);}
+      if(widthPct>=1.5){
+        const midIdx2=Math.round((sIdx+eIdx)/2);
+        const midPct=(midIdx2/TD*100).toFixed(4)+'%';
+        const tk=document.createElement('div');tk.className='gc-wtick';tk.style.left=midPct;tk.textContent=weekNum+'W';wt.appendChild(tk);
+      }
+      cur.setDate(cur.getDate()+7);weekNum++;
+    }
+  }
+  {const eIdx=Math.round((new Date(2026,12,1)-A0)/86400000);const ePct=(eIdx/TD*100).toFixed(4)+'%';const el=document.createElement('div');el.className='gc-mline';el.style.left=ePct;wt.appendChild(el);}
+  wh.appendChild(wt);
+  const ph2=document.createElement('div');ph2.className='gc-phdr2';wh.appendChild(ph2);
+  gc.appendChild(wh);
+
+  data.forEach((g,gi)=>{
+    const rc='rg'+(gi+1);const acc=gi===0?'var(--g1-acc)':'var(--g2-acc)';
+    const gl=document.createElement('div');gl.className=`c-lbl group-lbl rg0`;
+    gl.style.borderLeft=`4px solid ${acc}`;
+    gl.innerHTML=`<span style="color:${acc};font-size:12px;font-weight:700;">${g.group}</span>`;
+    gc.appendChild(gl);
+    const gt=document.createElement('div');gt.className='c-track rg0';gt.style.minHeight='32px';gc.appendChild(gt);
+    const gp=pCell(gpc(g));gp.className='c-prog rg0';gc.appendChild(gp);
+
+    g.aps.forEach(ap=>{
+      const isOpen=OS.has(ap.id);const ap_p=apc(ap);
+      const al=document.createElement('div');al.className=`c-lbl ap-lbl ${rc}`;
+      const chev=document.createElement('span');chev.style.cssText='font-size:9px;flex-shrink:0;cursor:pointer;color:var(--text3);transition:transform .15s;display:inline-flex;width:14px;';
+      if(isOpen)chev.style.transform='rotate(90deg)';chev.innerHTML='▶';
+      chev.onclick=e=>{e.stopPropagation();if(OS.has(ap.id))OS.delete(ap.id);else OS.add(ap.id);render();};
+      const at=document.createElement('span');at.innerHTML=hlBrackets(ap.label);at.style.cursor='pointer';
+      at.onclick=e=>{e.stopPropagation();showAP(ap);};
+      const ab=document.createElement('span');ab.style.cssText='font-size:10px;color:var(--text3);margin-left:3px;';ab.textContent=ap.children.length?'('+ap.children.length+')':'';
+      al.appendChild(chev);al.appendChild(at);al.appendChild(ab);gc.appendChild(al);
+
+      const pl=lanes(ap.bars);const lH=26,gap=3;
+      const lc=pl.reduce((m,b)=>Math.max(m,b.lane+1),1);
+      const th=lc*(lH+gap)+8;
+      const atr=document.createElement('div');atr.className=`c-track ${rc}`;atr.style.minHeight=th+'px';
+      pl.forEach(b=>{
+        const sl=di(b.start),el=di(b.end);
+        const lft=(sl/TD*100).toFixed(4)+'%',wdt=Math.max((el-sl+1)/TD*100,0.6).toFixed(4)+'%';
+        const tp=b.lane*(lH+gap)+4;
+        const bg=SC[b.stage]||'#ccc';const tc=ST[b.stage]||'#2C2C2A';
+        const bar=document.createElement('div');bar.className='bar';
+        bar.style.cssText=`left:${lft};width:${wdt};top:${tp}px;height:${lH}px;background:${bg};color:${tc};`;
+        const wp=(el-sl+1)/TD*100;
+        if(wp>4){const inn=document.createElement('div');inn.className='bar-text';inn.textContent=b.stage;bar.appendChild(inn);}
+        else{const out=document.createElement('div');out.className='bar-outer';out.style.cssText=`left:calc(${lft} + ${wdt} + 3px);top:${tp+lH/2}px;transform:translateY(-50%);`;out.textContent=b.stage;atr.appendChild(out);}
+        const key='bar:'+b.id;bar.onclick=e=>{e.stopPropagation();if(ES.has(key))ES.delete(key);else ES.add(key);render();};bar.title='클릭해서 단계·일정 수정';
+        atr.appendChild(bar);
+      });
+      gc.appendChild(atr);gc.appendChild(pCell(ap_p,()=>showAP(ap)));
+      ap.bars.forEach(b=>{const key='bar:'+b.id;if(ES.has(key)){const ep=bep(b,key);gc.appendChild(ep);}});
+
+      if(isOpen){
+        ap.children.forEach(c=>{
+          const cl=document.createElement('div');cl.className=`c-lbl sub-lbl ${rc}`;
+          const cs=document.createElement('span');cs.style.marginLeft='14px';cs.innerHTML=hlBrackets(c.name);cs.onclick=e=>{e.stopPropagation();showC(c,ap);};
+          cl.appendChild(cs);gc.appendChild(cl);
+          const ctr=document.createElement('div');ctr.className=`c-track ${rc}`;ctr.style.minHeight='34px';
+          const sl=di(c.start),el=di(c.end);
+          const lft=(sl/TD*100).toFixed(4)+'%',wdt=Math.max((el-sl+1)/TD*100,0.6).toFixed(4)+'%';
+          const cp=c.progress||0;
+          const bar=document.createElement('div');bar.className='bar';
+          bar.style.cssText=`left:${lft};width:${wdt};top:6px;height:22px;background:${c.color};color:#fff;cursor:pointer;`;
+          const pl2=document.createElement('div');pl2.className='bar-prog-layer';pl2.style.width=cp+'%';bar.appendChild(pl2);
+          const wp=(el-sl+1)/TD*100;
+          if(wp>5){const inn=document.createElement('div');inn.className='bar-text';inn.textContent=c.owner+' · '+fmt(c.start)+'~'+fmt(c.end);bar.appendChild(inn);}
+          else{const out=document.createElement('div');out.className='bar-outer';out.style.cssText=`left:calc(${lft} + ${wdt} + 3px);top:17px;transform:translateY(-50%);`;out.textContent=c.owner+' · '+fmt(c.start)+'~'+fmt(c.end);ctr.appendChild(out);}
+          bar.onclick=e=>{e.stopPropagation();showC(c,ap);};
+          ctr.appendChild(bar);gc.appendChild(ctr);
+          const cp2=pCell(cp,()=>showC(c,ap));cp2.className+=` ${rc}`;gc.appendChild(cp2);
+        });
+      }
+    });
+  });
+  requestAnimationFrame(updOv);
+}
+
+// ──────────────────────────────────────────
+// GitHub 설정 패널
+// ──────────────────────────────────────────
+document.getElementById('ghBtn').onclick=()=>{
+  const panel=document.getElementById('ghPanel');
+  const cfg=loadGhConfig();
+  document.getElementById('ghRepo').value=cfg.repo||'';
+  document.getElementById('ghBranch').value=cfg.branch||'main';
+  document.getElementById('ghToken').value=cfg.token||'';
+  panel.classList.toggle('open');
+};
+document.getElementById('ghPanelClose').onclick=()=>document.getElementById('ghPanel').classList.remove('open');
+document.getElementById('ghSaveConfig').onclick=()=>{
+  const cfg={
+    repo:document.getElementById('ghRepo').value.trim(),
+    branch:document.getElementById('ghBranch').value.trim()||'main',
+    token:document.getElementById('ghToken').value.trim()
+  };
+  if(!cfg.repo||!cfg.token){alert('Owner/Repo와 Token을 모두 입력해주세요.');return;}
+  saveGhConfig(cfg);
+  document.getElementById('ghPanel').classList.remove('open');
+  toast('GitHub 설정이 저장되었습니다.');
+};
+
+// GitHub Push 버튼
+document.getElementById('saveBtn').onclick=async()=>{
+  setStatus('saving','● 저장 중...');
+  try{
+    const payload={gantt:data, apDesc:AD};
+    await pushToGitHub(payload);
+    setStatus('saved','● 저장됨');
+    toast('GitHub에 저장 완료! Vercel이 자동 재배포됩니다 (약 30초).');
+  }catch(e){
+    setStatus('error','✕ 저장 실패');
+    toast('저장 실패: '+e.message);
+  }
+};
+
+// ──────────────────────────────────────────
+// 초기 로드
+// ──────────────────────────────────────────
+window.addEventListener('resize',updOv);
+
+(async()=>{
+  // OS에 모든 AP 펼쳐두기
+  await loadData();
+  data.forEach(g=>g.aps.forEach(ap=>{ syncOpenState(ap); }));
+  render();
+  initDrag();
+})();
+
+})();
+</script>
+</body>
+</html>
